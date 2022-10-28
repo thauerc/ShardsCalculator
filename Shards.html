@@ -1,0 +1,372 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Umbral Shards</title>
+    <style>
+      body {
+        background: black;
+        color: white;
+        font-family: 'Lucida Console'
+      }
+      input {
+        background: black;
+        color: white;
+      }
+    </style>
+    <link rel="shortcut icon" href="https://cdn.nwdb.info/db/images/live/v4/icons/items/resource/umbralshardt1.png">
+  </head>
+  <body>
+    <script>
+      let slots = [
+        'Weapon 1',
+        'Weapon 2',
+        'Head',
+        'Chest',
+        'Hands',
+        'Legs',
+        'Feet',
+        'Amulet',
+        'Ring',
+        'Earring'
+      ]
+
+      let weights = [
+        135,
+        135,
+        42,
+        73,
+        31,
+        42,
+        21,
+        40,
+        40,
+        40
+      ].map(a => a / 600)
+
+      let costs = [
+        10,
+        10,
+        10,
+        10,
+        15,
+        20,
+        25,
+        30,
+        35,
+        40,
+        45,
+        60,
+        80,
+        100,
+        130,
+        170,
+        210,
+        250,
+        300,
+        340,
+        380,
+        415,
+        450,
+        470,
+        485,
+        500,
+        515,
+        520,
+        530,
+        535,
+        540,
+        545,
+	550,
+        555,
+        560
+      ]
+
+      let order = costs
+        .map((c, gs) => weights.map((w, index) => ({ slot: index, gs, v: w / c })))
+        .flat()
+        .sort((a, b) => {
+          return b.v - a.v
+      })
+
+      let findUpgrades = (gear, shards) => {
+        gear = gear.map(i => i)
+        let spent = 0
+        let upgrades = 0
+        let allAbove599 = !gear.find(gs => gs < 600)
+        if (allAbove599) {
+          for (let i = 0; i < order.length && spent < shards; ++i) {
+            if (gear[order[i].slot] - 590 === order[i].gs) {
+              if (spent + costs[order[i].gs] > shards) {
+                break
+              }
+              upgrades += 1
+              spent += costs[order[i].gs]
+              gear[order[i].slot] += 1
+            }
+          }
+        } else {
+          while (shards > 0) {
+            // heap when
+            let best = gear.reduce((max, gs, slot) => {
+              if (gs > 624 || gs < 590) {
+                return max
+              }
+              if (max < 0) {
+                return slot
+              }
+              let vMax = weights[max] / costs[gear[max] - 590]
+              let vCurrent = weights[slot] / costs[gs - 590]
+              if (vMax < vCurrent) {
+                return slot
+              }
+              return max
+            }, -1)
+            if (best === -1) {
+              break
+            }
+            if (shards < costs[gear[best] - 590]) {
+              break
+            }
+            shards -= costs[gear[best] - 590]
+            gear[best] += 1
+          }
+        }
+        return gear
+      }
+
+      let createContainer = (type = 'div') => {
+        let container = document.createElement(type)
+        container.style.border = '.25em dashed white'
+        container.style.padding = '.5em'
+        container.style.marginBottom = '1em'
+        container.style.marginRight = '1em'
+        return container
+      }
+
+      let lhs = createContainer()
+      lhs.style.float = 'left'
+      lhs.appendChild(document.createElement('h5'))
+      lhs.children[0].textContent = 'Current Gear'
+
+      let rhs = createContainer()
+      rhs.style.float = 'right'
+      rhs.appendChild(document.createElement('h5'))
+      rhs.children[0].textContent = 'After Shard Gear'
+
+      let getGear = () => {
+        return [...lhs.querySelectorAll('input')].map(i => Number(i.value))
+      }
+
+      let getShards = () => {
+        return Number(document.getElementById('shards').value)
+      }
+
+      let estimateGs = gear => {
+        let est = gear.reduce((sum, gs, index) => sum + (gs - 600) * weights[index], 600)
+        console.log(`Est Gs: ${est}`)
+        return Math.floor(est - 0.5)
+      }
+
+      let update = () => {
+        let gear = getGear()
+        let shards = getShards()
+        let newGear = findUpgrades(gear, shards)
+        rhs.querySelectorAll('input').forEach((i, index) => {
+          i.value = newGear[index]
+        })
+        let est = estimateGs(newGear)
+        rhs.querySelector('h5').textContent = `After Shard Gear (Est. Gs ${est})`
+        let inputs = [...rhs.querySelectorAll('input')]
+        inputs.forEach((input, index) => {
+          input.style.borderColor = 'white'
+          if (gear[index] != newGear[index]) {
+            input.style.borderColor = 'green'
+          }
+        })
+
+        estimateShardsToRaiseGS()
+        save()
+      }
+
+      let updateTimeout = null
+      let debounce = () => {
+        clearTimeout(updateTimeout)
+        updateTimeout = setTimeout(update, 400)
+      }
+
+      let cancel = () => {
+        clearTimeout(updateTimeout)
+        updateTimeout = null
+        ;[...rhs.querySelectorAll('input')].forEach(i => {
+          i.value = '???'
+          i.style.borderColor = 'white'
+        })
+      }
+
+      let validateGs = e => {
+        let input = e.target
+        let gs = Number(input.value)
+        if (Number.isNaN(gs) || gs < 0 || gs > 625) {
+          input.style.borderColor = 'red'
+          cancel()
+        } else {
+          input.style.borderColor = 'black'
+          input.value = Math.floor(gs)
+          debounce()
+        }
+      }
+
+      slots.forEach(slot => {
+        let label = document.createElement('span')
+        label.textContent = slot
+        label.style.paddingRight = '1em'
+        label.style.display = 'inline-block'
+        label.style.width = '10em'
+
+        let input = document.createElement('input')
+        input.setAttribute('type', 'text')
+        input.value = '600'
+        input.onchange = validateGs
+        input.oninput = input.onchange
+
+        let container = document.createElement('div')
+        container.appendChild(label)
+        container.appendChild(input)
+        container.style.overflow = 'auto'
+        container.style.textAlign = 'left'
+        lhs.appendChild(container)
+      })
+
+      slots.forEach(slot => {
+        let label = document.createElement('span')
+        label.textContent = slot
+        label.style.paddingRight = '1em'
+        label.style.display = 'inline-block'
+        label.style.width = '10em'
+
+        let input = document.createElement('input')
+        input.setAttribute('type', 'text')
+        input.setAttribute('readonly', null)
+        input.value = '?'
+
+        let container = document.createElement('div')
+        container.appendChild(label)
+        container.appendChild(input)
+        container.style.overflow = 'auto'
+        container.style.textAlign = 'left'
+        rhs.appendChild(container)
+      })
+
+      let header = document.createElement('h4')
+      header.style.textAlign = 'center'
+      header.textContent = 'Umbral Shards'
+
+      let shards = document.createElement('input')
+      shards.id = 'shards'
+      shards.style.marginBottom = '1em'
+      shards.value = '0'
+      shards.onchange = e => {
+        let currency = Number(shards.value)
+        if (Number.isNaN(currency)) {
+          e.target.style.borderColor = 'red'
+          cancel()
+        } else {
+          e.target.style.borderColor = 'white'
+          debounce()
+        }
+      }
+      shards.oninput = shards.onchange
+
+      let button = document.createElement('button')
+      button.textContent = '<<'
+      button.onclick = () => {
+        lhInputs = [...lhs.querySelectorAll('input')]
+        rhInputs = [...rhs.querySelectorAll('input')]
+        if (rhInputs[0].value[0] != '?') {
+          lhInputs.forEach((_, index) => {
+            lhInputs[index].value = rhInputs[index].value
+          })
+        }
+        shards.value = '0'
+        debounce()
+      }
+
+      let estimatedShardsLabel = document.createElement('h5')
+      let estimatedShardsValueLabel = document.createElement('h3')
+      estimatedShardsLabel.textContent = 'Est. shards needed to raise GS:'
+      
+      const shardsSoftCap = (costs[costs.length - 1] * slots.length);
+
+      function estimateShardsToRaiseGS () {
+        let gear = getGear()
+        let currentEstimatedGS = estimateGs(gear)
+
+        if (currentEstimatedGS >= 625) {
+          return;
+        }
+
+        let shards = 1;
+        let estimatedGS = currentEstimatedGS
+        let cannotBeEstimated = false
+        while (estimatedGS <= currentEstimatedGS) {
+          estimatedGS = estimateGs(findUpgrades(gear, shards++))
+
+          if (shards >= shardsSoftCap) {
+            cannotBeEstimated = true
+            break
+          }
+        }
+
+        if (cannotBeEstimated) {
+          estimatedShardsValueLabel.textContent = "Cannot be estimated"
+        } else {
+          estimatedShardsValueLabel.textContent = shards
+        }
+      }
+
+      /// Save input gearscore to local web storage
+      function save () {
+        localStorage.lhInputs = [...lhs.querySelectorAll('input')].map(input => input.value)
+      }
+
+      /// Load from web storage to input gearscore if there is data
+      function load () {
+        if (!localStorage.lhInputs) {
+          return;
+        }
+
+        let lhInputsValues = localStorage.lhInputs.split(",")
+
+        lhs.querySelectorAll('input').forEach((input, index) => {
+          input.value = lhInputsValues[index]
+        })
+
+        debounce()
+      }
+      let buttonContainer = document.createElement('div')
+      buttonContainer.appendChild(button)
+
+      buttonContainer.appendChild(document.createElement('br'))
+      buttonContainer.appendChild(document.createElement('br'))
+      buttonContainer.appendChild(estimatedShardsLabel)
+      buttonContainer.appendChild(estimatedShardsValueLabel)
+
+      let boxContainer = document.createElement('div')
+      boxContainer.style.margin = '0 auto'
+      boxContainer.style.padding = '0 10%'
+      boxContainer.appendChild(lhs)
+      boxContainer.appendChild(rhs)
+
+      let container = document.createElement('div')
+      container.style.textAlign = 'center'
+      container.appendChild(header)
+      container.appendChild(shards)
+      container.appendChild(boxContainer)
+      container.appendChild(buttonContainer)
+      document.body.appendChild(container)
+
+      load()
+    </script>
+  </body>
+</html>
